@@ -1,0 +1,21 @@
+package test;
+public class InGameThread extends Thread {
+
+	public InGameThread() {
+
+	}
+
+	@Override
+	public void run() {
+		while (Server.gameStart) {
+			try {
+				Thread.sleep(500);
+				OneCardGUI.centerNameLa.setText((Server.userIdx + 1) + "번 플레이어");
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+	}
+}

@@ -1,0 +1,142 @@
+package test;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.Socket;
+
+/**
+ * 이 클래스는 클라이언트와 통신을 담당하는 기능을 하는 서버다. 이 클래스는 쓰레드로 클라이언트로 부터 들어오는 입력을 받는다. 입력되는
+ * 프로토콜에 따라 출력 메세지를 구분하는 역할을 수행한다. Thread 클래스를 상속받는다. GameServer 클래스의 메소드들을
+ * 오버라이드한다.
+ *
+ *
+ * @version 1.02 17/02/10
+ * @author team 2
+ * @since JDK1.3
+ */
+public class Handler extends Thread {
+
+	private Socket socket;
+	private BufferedReader input;
+	private PrintWriter output;
+	private Server server;
+	private OneCardGUI gui;
+
+	/**
+	 * GameServer 클래스에서 GameHandler 인스턴스를 생성하기 위한 생성자.
+	 * 
+	 * getInputStream, getOutputStream 메소드때문에 IOException 예외처리를 했다.
+	 *
+	 * @param server
+	 *            서버
+	 * @param socket
+	 *            소켓
+	 * @since JDK 1.2
+	 */
+	Handler(Server server, Socket socket) throws IOException {
+		server.register(this);
+		this.socket = socket;
+		this.server = server;
+
+		InputStream ins = socket.getInputStream(); // 소켓으로부터 서버의 데이터 입구를 만듬.
+		OutputStream os = socket.getOutputStream(); // 소켓으로부터 소버의 데이터 출구를 만듬.
+
+		input = new BufferedReader(new InputStreamReader(ins)); // 입구에
+																// BufferedReader라는
+																// 필터를 달아줌.
+		output = new PrintWriter(new OutputStreamWriter(os), true); // 출구에
+																	// PrintWriter라는
+																	// 필터를 달아줌.
+
+	}
+
+	/**
+	 * 특정 클라이언트 한 명에게만 메세지를 출력할 수 있는 메소드.
+	 * 
+	 * @param message
+	 *            각 프로토콜에 해당하는 메세지.
+	 * @since JDK 1.2
+	 */
+	protected void unicast(String message) {
+		output.println(message); // PrintWriter 의 println 메소드 사용.
+	}
+
+	/**
+	 * 모든 클라이언트에게 메세지를 출력하는 메소드. GameServer 클래스의 broadcast 메소드를 오버라이드한다.
+	 * 
+	 * @param message
+	 *            각 프로토콜에 해당하는 메세지.
+	 * @since JDK 1.2
+	 */
+	protected void broadcast(String message) {
+		server.broadcast(message); // GameServer 클래스의 broadcast 메소드 사용.
+	}
+
+	/**
+	 * 통신을 담당하는 쓰레드 메소드. 클라이언트가 접속하면 GameServer 클래스에서 쓰레드를 작동한다.
+	 * 
+	 * @since JDK 1.2
+	 */
+	public void run() {
+		// gui.cardDeck.addActionListener(this);
+		int player = Server.playerNum;
+		output.println("ready|" + player);
+		Server.playerNum++;
+		try {
+			// 쓰레드를 위한 무한 반복문.
+			// server.register(this); // 채팅창에 출력하기 위한 테스트 코드
+
+			while (true) {
+				String line = input.readLine();
+				System.out.println(line);
+
+				if (line.equals("1000")) {
+					server.createDeck();
+					String open = server.cardOpen();
+					System.out.println(open);
+					broadcast("start|" + open);
+					for (int i = 0; i < 28; i++) {
+						String getCard = server.cardDraw();
+						broadcast("cardDivide|" + Server.userIdx + "|" + getCard);
+			
+						if (Server.userIdx == 3) {
+							Server.userIdx = 0;
+						} else {
+							Server.userIdx++;
+						}
+					}
+					broadcast("ok|0");
+					
+					System.out.println("등교 완료");
+				} else if(line.equals("1100")){
+					
+					String getCard = server.cardDraw();
+					broadcast("cardDivide|" + Server.userIdx + "|" + getCard);
+					Server.cardIdx++;
+					if (Server.userIdx == 3) {
+						Server.userIdx = 0;
+					} else {
+						Server.userIdx++;
+					}
+				}
+
+			} // end while
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		} // end catch
+	}
+
+	// @Override
+	// public void actionPerformed(ActionEvent e){
+	// Object obj = e.getSource();
+	// if(obj == gui.cardDeck){
+	// System.out.println("카드덱 클릭");
+	// }
+	// }
+
+}

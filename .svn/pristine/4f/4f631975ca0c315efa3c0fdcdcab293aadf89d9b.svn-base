@@ -1,0 +1,331 @@
+package client;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.util.StringTokenizer;
+
+
+
+/**
+* 이 클래스는 클라이언트 클래스다. 
+* 사용자의 UI와 서버와 통신을 하는  역할을 수행한다.
+* 쓰레드 사용을 위해 Runnable 인터페이스를 상속받는다.
+*
+* @version     1.02 17/02/10
+* @author      team 2
+* @since       JDK1.3
+*/
+public class Client implements Runnable, ActionListener {
+	
+	private final int DOUBLED_ID = 10; // 회원 가입시 중복 ID일 때 보내는 메세지의 프로토콜 넘버. 클라이언트에게 다이얼로그를 생성한다.
+	private final int NOT_LON_IN = 20;  // 로그인 시 ID가 일치하지 않을 때 보내는 메세지의 프로토콜 넘버. 클라이언트에게 다이얼로그를 생성한다.
+	private final int DOUBLED_LOG_IN = 30;  // 로그인 시 PW가 일치하지 않을 때 보내는 메세지의 프로토콜 넘버. 클라이언트에게 다이얼로그를 생성한다.
+	private final int ADD_MEMBER = 60; // 사용자가 회원 가입 시에 보내는 메세지의 프로토콜 넘버. 클라이언트에게 다이얼로그를 생성한다.
+	private final int LOG_IN = 70;  // 사용자가 로그인 시에 보내는 메세지의 프로토콜 넘버. 클라이언트에게 다이얼로그를 생성한다.
+	
+//	private final int DEFAULT = 100; // 클라이언트가 접속하자 마자 보내주는 시스템 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_ENTER = 110; // 클라이언트가 접속할 때 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_PUTDOWN = 120; // 게이머가 카드를 냈을 때 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_PUTUP = 130; // 게이머가 카드를 한 장 먹었을 때 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_TIMESUP = 140; // 게이머가 주어진 시간을 다 썼을 때 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_ONECARD = 150; // 게이머가 가진 카드가 1 장 남았을 때 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_WIN = 160; // 게이머가 카드를 다 내면 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_TURN = 170; // 게이머 차례가 왔을 때 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_END_TURN = 180; // 자신의 차례가 끝났을 때 보내는 메세지의 프로토콜 넘버.
+	private final int SYSTEM_MESSAGE_EXIT = 190; // 클라이언트가 접속을 끊었을 때 보내는 시스템 메세지의 프로토콜 넘버.
+	private final int CONVERSATION = 200; // 채팅에 사용되는 프로토콜 넘버. 
+	
+	private BufferedReader input;
+	private PrintWriter output;
+	private Thread listener;
+	private String host;
+	private String myId;
+	private OneCardGUI frame;
+	
+	/**
+    * 사용자 UI와 쓰레드를 생성, 작동시키는 생성자.
+    *
+    * @param   server   서버 주소
+    * @since   JDK 1.2
+    */
+	Client(String server){
+		
+		myId = "test"; // test 코드
+		
+		host = server;
+		
+		// 사용자 UI를 위해 OneCardGUI 객체 생성.
+		frame = new OneCardGUI();
+		frame.setVisible(true);
+		
+		// 버튼과 채팅 텍스트필드에 이벤트 감지기 설정.
+		frame.sendMsg.addActionListener(this);
+		frame.btn_Start_1.addActionListener(this);
+		frame.btn_Start_2.addActionListener(this);
+		frame.btn_Join.addActionListener(this);
+		
+		// 통신(서버로부터 입력받기)을 위한 쓰레드 생성.
+		listener = new Thread(this);
+		listener.start();
+		
+	}
+	
+	/**
+    * 쓰레드가 작동하면 실행되는 메소드. 서버에서 메세지를 입력받기를 기다리다가 메세지가 오면 출력한다.
+    *
+    * @since   JDK 1.2
+    */
+	public void run(){
+		
+		try{
+			Socket socket = new Socket(host, 1000);
+			InputStream ins = socket.getInputStream();
+			OutputStream os = socket.getOutputStream();
+			
+			input = new BufferedReader(new InputStreamReader(ins));
+			output = new PrintWriter(new OutputStreamWriter(os), true);
+			
+			// 무한 반복문으로 서버에서 들어오는 입력을 검사하고 출력한다.
+			
+			while(true) {
+				String user_id = "";
+				String message = "";
+				String line = input.readLine();
+				StringTokenizer st = new StringTokenizer(line, "|");
+				
+				// 프로토콜이 메세지의 제일 앞에 오므로 정수형으로 타입변환한다.
+				int protocol = Integer.parseInt(st.nextToken());
+				
+				// 프로토콜로 구분되는 스위치문.
+				
+				switch (protocol) {
+				
+				case DOUBLED_ID :
+					System.out.println("서버에서 doubled_id 왔음");   // 테스트 코드.
+					// 아이디 중복 경고 다이얼로그
+					frame.la_dialog.setText("중복된 ID입니다 !");
+					frame.dialog.setVisible(true);
+					
+					break;
+					
+				case NOT_LON_IN :
+					System.out.println("서버에서 not_log_in 왔음");   // 테스트 코드.
+					// 존재하지 않는 아이디 경고 다이얼로그
+					frame.la_dialog.setText("ID가 없거나 비밀번호가 일치하지 않습니다!");
+					frame.dialog.setVisible(true);
+					
+					frame.textField_Start_1.setText("");
+					frame.textField_Start_2.setText("");
+					break;
+					
+				case DOUBLED_LOG_IN :
+					System.out.println("서버에서 doubled_log_in 왔음");   // 테스트 코드.
+					// 같은 아이디로 로그인한 사람이 이미 있는 경우의 경고 다이얼로그.
+					frame.la_dialog.setText("이미 접속중인 사용자입니다!");
+					frame.dialog.setVisible(true);
+					
+					frame.textField_Start_1.setText("");
+					frame.textField_Start_2.setText("");
+					break;
+					
+				case ADD_MEMBER :
+					// 회원가입 확인 다이얼로그
+					System.out.println("서버에서 Add_member 왔음"); // 테스트 코드.
+					
+					frame.textField_Join_1.setText("");
+					frame.textField_Join_2.setText("");
+					frame.textField_Join_3.setText("");
+					
+					frame.la_dialog.setText("회원가입 성공 !");
+					frame.dialog.setVisible(true);
+					frame.cards.show(frame.Main_p, "Start");
+					break;
+					
+				case LOG_IN :
+					// 로그인 확인 다이얼로그
+					frame.la_dialog.setText("로그인 성공 !");
+					frame.dialog.setVisible(true);
+					frame.cards.show(frame.Main_p, "Main");
+					break;
+					
+				case SYSTEM_MESSAGE_ENTER :
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님이 입장했습니다.");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				case SYSTEM_MESSAGE_PUTDOWN :
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님이 카드를 한 장 냈습니다.");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				case SYSTEM_MESSAGE_PUTUP :
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님이 카드를 한 장 먹었습니다.");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				case SYSTEM_MESSAGE_TIMESUP : 
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님이 시간을 초과했습니다.");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				case SYSTEM_MESSAGE_ONECARD :
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님 원카드!!!");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				case SYSTEM_MESSAGE_WIN:
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님이 이겼습니다~");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				case SYSTEM_MESSAGE_TURN:
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님의 차례입니다.");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				case SYSTEM_MESSAGE_EXIT :
+					user_id = st.nextToken();
+					frame.systemMsg.append(user_id + " 님이 퇴장했습니다.");
+					//systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+					frame.systemMsgBar.getVerticalScrollBar().setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+					input.close();
+					output.close();
+					socket.close();
+					break;
+					
+				case CONVERSATION :
+					user_id = st.nextToken();
+					message = st.nextToken();
+					frame.userMsg.append(user_id + ": " + message + "\n");
+					//userMsg 스크롤바를 항상 최신 글에 맞춘다.
+					frame.userMsgBar.getVerticalScrollBar().setValue(frame.userMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+					
+				} // end switch
+			} // end while
+		} catch (Exception ex){
+			
+		} // end catch
+	}
+	
+	/**
+    * 서버에 메세지를 출력을 할 때 호출되는 메소드.
+    *
+    * @param protocol	 프로토콜.
+    * @param message 	사용자가 채팅할 때 텍스트필드에 입력한 문자열. 
+    * @since   JDK 1.2
+    */
+	void output(int protocol){
+		
+		switch (protocol) {
+			
+		case ADD_MEMBER :
+			output.println(ADD_MEMBER + "|" + frame.textField_Join_1.getText()
+									  + "|" + frame.textField_Join_2.getText() 
+									  + "|" + frame.textField_Join_3.getText()); 
+			break;
+			
+		case LOG_IN :
+			output.println(LOG_IN + "|" + frame.textField_Start_1.getText() 
+								  + "|" + frame.textField_Start_2.getText()); 
+			break;
+			
+		case SYSTEM_MESSAGE_ENTER :
+			output.println(SYSTEM_MESSAGE_ENTER + "|" + myId);
+			break;
+			
+		case SYSTEM_MESSAGE_PUTDOWN :
+			output.println(SYSTEM_MESSAGE_PUTDOWN + "|" + myId);
+			break;
+			
+		case SYSTEM_MESSAGE_PUTUP :
+			output.println(SYSTEM_MESSAGE_PUTUP + "|" + myId);
+			break;
+			
+		case SYSTEM_MESSAGE_TIMESUP : 
+			output.println(SYSTEM_MESSAGE_TIMESUP + "|" + myId);
+			break;
+			
+		case SYSTEM_MESSAGE_ONECARD :
+			output.println(SYSTEM_MESSAGE_ONECARD + "|" + myId);
+			break;
+			
+		case SYSTEM_MESSAGE_WIN :
+			output.println(SYSTEM_MESSAGE_WIN + "|" + myId);
+			break;
+			
+		case SYSTEM_MESSAGE_END_TURN :
+			output.println(SYSTEM_MESSAGE_END_TURN + "|" + myId);
+			break;
+			
+		case SYSTEM_MESSAGE_EXIT :
+			output.println(SYSTEM_MESSAGE_EXIT + "|" + myId);
+			break;
+			
+		case CONVERSATION :
+			
+			// 채팅창에 입력된 값을 message라는 변수에 담는다.
+			String message = frame.sendMsg.getText();
+			
+			// 사용자가 채팅 텍스트필드에 입력을 했는지 안했는지 검사.
+			
+			if (message.equals("")){   	// 입력을 하지 않은 경우.
+				output.println(CONVERSATION + "|" + myId + "|" + " ");
+				frame.sendMsg.setText("");
+			} else {                   // 입력을 한 경우.
+				output.println(CONVERSATION + "|" + myId + "|" + message);
+				frame.sendMsg.setText("");
+			} // end else 
+			break;
+		} // end switch
+		
+	}
+	
+	@Override
+	public void actionPerformed(ActionEvent e){
+		Object obj = e.getSource();
+		
+		// 컴포넌트에 따른 이벤트 처리.
+		
+		if (obj == frame.btn_Start_1){ // 초기화면에서 '로그인'을 클릭했을 때.
+			output(LOG_IN);
+		} else if (obj == frame.btn_Start_2) { // 초기화면에서 '회원가입'을 클릭했을 때.
+			frame.cards.show(frame.Main_p, "Join");
+		} else if (obj == frame.btn_Join) { // 회원가입 화면에서 'join'을 클릭했을 때.
+			output(ADD_MEMBER);  
+//			frame.cards.show(frame.Main_p, "Main");
+		} else if (obj == frame.sendMsg){ // 채팅 텍스트필드에서 엔터를 입력했을 때.
+			output(CONVERSATION);
+		}
+	}
+	
+	// 메인 메소드
+	public static void main(String args[]){
+		if (args.length > 0){
+			new Client(args[0]);
+		} else {
+			new Client("localhost");
+		} // end else
+	}
+}

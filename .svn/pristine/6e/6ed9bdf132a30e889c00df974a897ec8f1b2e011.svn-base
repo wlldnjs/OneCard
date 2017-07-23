@@ -1,0 +1,52 @@
+package onecard;
+
+public class Member {
+
+	String u_id, u_pass, name;
+	int victory;
+
+	public Member(String u_id, String u_pass, String name, int victory) {
+		this.u_id = u_id;
+		this.u_pass = u_pass;
+		this.name = name;
+	}
+
+	
+
+	public int getVictory() {
+		return victory;
+	}
+
+
+
+	public void setVictory(int victory) {
+		this.victory = victory;
+	}
+
+
+
+	public String getU_id() {
+		return u_id;
+	}
+
+	public void setU_id(String u_id) {
+		this.u_id = u_id;
+	}
+
+	public String getU_pass() {
+		return u_pass;
+	}
+
+	public void setU_pass(String u_pass) {
+		this.u_pass = u_pass;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+}

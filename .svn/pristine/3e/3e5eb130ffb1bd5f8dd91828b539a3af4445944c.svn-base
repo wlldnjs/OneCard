@@ -1,0 +1,1276 @@
+package client;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.StringTokenizer;
+
+import javax.swing.JButton;
+
+/**
+ * 이 클래스는 클라이언트 클래스다. 사용자의 UI와 서버와 통신을 하는 역할을 수행한다. 쓰레드 사용을 위해 Runnable 인터페이스를
+ * 상속받는다.
+ *
+ * @version 1.02 17/02/10
+ * @author team 2
+ * @since JDK1.3
+ */
+public class Client implements Runnable, ActionListener, KeyListener {
+
+	private final int DOUBLED_ID = 10; // 회원 가입시 중복 ID일 때 보내는 메세지의 프로토콜 넘버.
+										// 클라이언트에게 다이얼로그를 생성한다.
+	private final int NOT_LON_IN = 20; // 로그인 시 ID가 일치하지 않을 때 보내는 메세지의 프로토콜 넘버.
+										// 클라이언트에게 다이얼로그를 생성한다.
+	private final int DOUBLED_LOG_IN = 30; // 로그인 시 PW가 일치하지 않을 때 보내는 메세지의 프로토콜
+											// 넘버. 클라이언트에게 다이얼로그를 생성한다.
+	private final int ADD_MEMBER = 60; // 사용자가 회원 가입 시에 보내는 메세지의 프로토콜 넘버.
+										// 클라이언트에게 다이얼로그를 생성한다.
+	private final int LOG_IN = 70; // 사용자가 로그인 시에 보내는 메세지의 프로토콜 넘버. 클라이언트에게
+									// 다이얼로그를 생성한다.
+	private final int FIRST_ENTER = 75;
+	private final int USER_ENTER = 76;
+	private final int LOG_OUT = 80;
+	private final int DEFAULT_ROOM = 90;
+	private final int DEFAULT_USERS = 95;
+	private final int NOW_PORT_NUMBER = 96;
+
+	private final int MAKE_ROOM = 100;
+	private final int ENTER_ROOM = 101;
+	private final int TELL_MY_ROOM = 102;
+	private final int FULL_ROOM = 103;
+	private final int DELETE_ROOM = 104;
+	private final int GAME_CHAT = 105;
+	private final int KNOCK_ROOM = 106;
+	private final int OK_ROOM = 107;
+
+	private final int GAME_MESSAGE_IM_IN = 109;
+	private final int GAME_MESSAGE_USER_ENTER = 110; // 클라이언트가 접속할 때 보내는 메세지의
+														// 프로토콜 넘버.
+	private final int GAME_MESSAGE_START = 115;
+	private final int GAME_MESSAGE_CARD_OPEN = 116;
+	private final int GAME_MESSAGE_CARD_DIVIDE = 117;
+	private final int GAME_MESSAGE_PUTDOWN = 120; // 게이머가 카드를 냈을 때 보내는 메세지의 프로토콜
+													// // 넘버.
+	private final int GAME_MESSAGE_USE_K = 121;
+	private final int GAME_MESSAGE_USE_7 = 122;
+	private final int GAME_MESSAGE_ATTACK = 123;
+	private final int GAME_MESSAGE_ATTACK_END = 124;
+	private final int GAME_MESSAGE_PUTUP = 130; // 게이머가 카드를 한 장 먹었을 때 보내는 메세지의
+												// 프로토콜 넘버.
+	private final int GAME_MESSAGE_TIMESUP = 140; // 게이머가 주어진 시간을 다 썼을 때 보내는
+													// 메세지의 프로토콜 넘버.
+	private final int GAME_MESSAGE_ONECARD = 150; // 게이머가 가진 카드가 1 장 남았을 때 보내는
+													// 메세지의 프로토콜 넘버.
+	private final int GAME_MESSAGE_WIN = 160; // 게이머가 카드를 다 내면 보내는 메세지의 프로토콜 넘버.
+	private final int GAME_MESSAGE_DEAD = 165; 
+	private final int GAME_MESSAGE_TURN = 170; // 게이머 차례가 왔을 때 보내는 메세지의 프로토콜 넘버.
+	private final int GAME_MESSAGE_END_TURN = 180; // 자신의 차례가 끝났을 때 보내는 메세지의
+													// 프로토콜 넘버.
+	private final int GAME_MESSAGE_EXIT = 190; // 클라이언트가 접속을 끊었을 때 보내는 시스템 메세지의
+												// 프로토콜 넘버.
+	private final int GAME_MESSAGE_END_GAME = 191;
+	private final int CONVERSATION = 200; // 채팅에 사용되는 프로토콜 넘버.
+
+	private BufferedReader input;
+	private PrintWriter output;
+	private Thread listener;
+	private String host;
+	private String myId;
+	private OneCardGUI frame;
+	private Socket socket;
+	private String myRoomNumber;
+	private int now_portNumber;
+	private GameThread gameThread;
+
+	private static int myNum = 0;
+	public boolean ready = false;
+	private int userIdx = 0;
+	private String useCard = "";
+	private boolean playBack = false;
+	private boolean playJump = false;
+	private boolean cardChange = false;
+	private boolean attack = false;
+
+	private List<String> cardList = new ArrayList<String>(); // 카드 순서 저장 List
+	private List<String> playerCards = new ArrayList<String>(); // 사용자의 패 리스트
+
+	/**
+	 * 사용자 UI와 쓰레드를 생성, 작동시키는 생성자.
+	 *
+	 * @param server
+	 *            서버 주소
+	 * @since JDK 1.2
+	 */
+	Client(String server) {
+
+		host = server;
+
+		// 사용자 UI를 위해 OneCardGUI 객체 생성.
+		frame = new OneCardGUI();
+		frame.setVisible(true);
+
+//		cardList.add("jb");
+		for (int i = 0; i < 13; i++) {
+			cardList.add("s" + (i + 1));
+		}
+		for (int i = 0; i < 13; i++) {
+			cardList.add("h" + (i + 1));
+		}
+		for (int i = 0; i < 13; i++) {
+			cardList.add("d" + (i + 1));
+		}
+		for (int i = 0; i < 13; i++) {
+			cardList.add("c" + (i + 1));
+		}
+//		cardList.add("jc");
+
+		
+		// 버튼과 채팅 텍스트필드에 이벤트 감지기 설정.
+		frame.btn_Start_1.addActionListener(this);
+		frame.btn_Start_2.addActionListener(this);
+
+		frame.creatGame.addActionListener(this);
+		frame.joinGame.addActionListener(this);
+		frame.waiting_textField.addActionListener(this);
+
+		frame.btn_Join.addActionListener(this);
+		frame.joinBackBtn.addActionListener(this);
+
+		frame.sendMsg.addActionListener(this);
+		frame.mainBackBtn.addActionListener(this);
+
+		// key이벤트 감지기
+		frame.textField_Start_1.addKeyListener(this);
+		frame.textField_Start_2.addKeyListener(this);
+		frame.textField_Join_1.addKeyListener(this);
+		frame.textField_Join_2.addKeyListener(this);
+		frame.textField_Join_3.addKeyListener(this);
+
+		// 통신(서버로부터 입력받기)을 위한 쓰레드 생성.
+		listener = new Thread(this);
+		listener.start();
+
+		
+		
+		
+		
+		
+		frame.addWindowListener(new WindowAdapter() {
+			public void windowClosing(WindowEvent e) {
+				try {
+					if (myId == null) {
+						System.exit(0);
+						input.close();
+						output.close();
+						socket.close();
+					}
+					output(LOG_OUT);
+					System.exit(0);
+					input.close();
+					output.close();
+					socket.close();
+				} catch (IOException ex) {
+				}
+			}
+		});
+	}
+
+	/**
+	 * 쓰레드가 작동하면 실행되는 메소드. 서버에서 메세지를 입력받기를 기다리다가 메세지가 오면 출력한다.
+	 *
+	 * @since JDK 1.2
+	 */
+	public void run() {
+
+		try {
+			socket = new Socket(host, 1000);
+			InputStream ins = socket.getInputStream();
+			OutputStream os = socket.getOutputStream();
+
+			input = new BufferedReader(new InputStreamReader(ins));
+			output = new PrintWriter(new OutputStreamWriter(os), true);
+
+			// 무한 반복문으로 서버에서 들어오는 입력을 검사하고 출력한다.
+
+			while (true) {
+				String user_id = "";
+				String message = "";
+				String roomNumber;
+				String line = input.readLine();
+				StringTokenizer st = new StringTokenizer(line, "|");
+
+				// 프로토콜이 메세지의 제일 앞에 오므로 정수형으로 타입변환한다.
+				int protocol = Integer.parseInt(st.nextToken());
+
+				// 프로토콜로 구분되는 스위치문.
+
+				switch (protocol) {
+
+				case DOUBLED_ID:
+
+					// 아이디 중복 경고 다이얼로그
+					frame.la_dialog.setText("중복된 ID입니다 !");
+					frame.dialog.setVisible(true);
+
+					break;
+
+				case NOT_LON_IN:
+
+					// 존재하지 않는 아이디 경고 다이얼로그
+					frame.la_dialog.setText("ID가 없거나 비밀번호가 일치하지 않습니다!");
+					frame.dialog.setVisible(true);
+
+					frame.textField_Start_1.setText("");
+					frame.textField_Start_2.setText("");
+					break;
+
+				case DOUBLED_LOG_IN:
+
+					// 같은 아이디로 로그인한 사람이 이미 있는 경우의 경고 다이얼로그.
+					frame.la_dialog.setText("이미 접속중인 사용자입니다!");
+					frame.dialog.setVisible(true);
+
+					frame.textField_Start_1.setText("");
+					frame.textField_Start_2.setText("");
+					break;
+
+				case ADD_MEMBER:
+
+					frame.textField_Join_1.setText("");
+					frame.textField_Join_2.setText("");
+					frame.textField_Join_3.setText("");
+
+					// 회원가입 확인 다이얼로그
+					frame.la_dialog.setText("회원가입 성공 !");
+					frame.dialog.setVisible(true);
+					frame.cards.show(frame.Main_p, "Start");
+					break;
+
+				case LOG_IN:
+					// 로그인 확인 다이얼로그
+					frame.la_dialog.setText("로그인 성공 !");
+					frame.dialog.setVisible(true);
+
+					// myId 값을 로그인 할 때 입력한 아이디로 저장한다.
+					myId = frame.textField_Start_1.getText();
+
+					frame.cards.show(frame.Main_p, "Wait");
+
+					output(FIRST_ENTER);
+
+					break;
+
+				case DEFAULT_USERS:
+
+					frame.inPlayerlist.removeAll();
+
+					while (st.hasMoreTokens()) {
+						user_id = st.nextToken();
+						frame.inPlayerlist.add(user_id);
+					}
+
+					frame.inPlayerlist.remove(myId);
+
+					System.out.println("default users 왔음.");
+
+					break;
+
+				case DEFAULT_ROOM:
+
+					frame.roomList.removeAll();
+
+					while (st.hasMoreTokens()) {
+						roomNumber = st.nextToken();
+						frame.roomList.add(roomNumber);
+					}
+
+					System.out.println("default rooms 왔음.");
+					break;
+
+				case NOW_PORT_NUMBER:
+
+					now_portNumber = Integer.parseInt(st.nextToken());
+					break;
+
+				case USER_ENTER:
+
+					user_id = st.nextToken();
+
+					frame.inPlayerlist.add(user_id);
+
+					frame.waiting_userMsg.append(user_id + " 님이 입장했습니다." + "\n");
+
+					// waiting_userMsg 스크롤바를 항상 최신 글에 맞춘다.
+					frame.waiting_userMsgBar.getVerticalScrollBar()
+							.setValue(frame.waiting_userMsgBar.getVerticalScrollBar().getMaximum());
+
+					System.out.println("user enter 왔음.");
+					break;
+
+				case LOG_OUT:
+
+					user_id = st.nextToken();
+					frame.waiting_userMsg.append(user_id + " 님이 나갔습니다." + "\n");
+
+					// waiting_userMsg 스크롤바를 항상 최신 글에 맞춘다.
+					frame.waiting_userMsgBar.getVerticalScrollBar()
+							.setValue(frame.waiting_userMsgBar.getVerticalScrollBar().getMaximum());
+
+					frame.inPlayerlist.remove(user_id);
+
+					break;
+
+				case MAKE_ROOM:
+
+					user_id = st.nextToken();
+					roomNumber = st.nextToken();
+
+					frame.inPlayerlist.remove(user_id);
+					frame.roomList.add(roomNumber);
+
+					frame.waiting_userMsg.append(user_id + " 님이 " + roomNumber + " 번 방을 만들었습니다." + "\n");
+
+					// waiting_userMsg 스크롤바를 항상 최신 글에 맞춘다.
+					frame.waiting_userMsgBar.getVerticalScrollBar()
+							.setValue(frame.waiting_userMsgBar.getVerticalScrollBar().getMaximum());
+
+					break;
+
+				// case TELL_MY_ROOM :
+				// user_id = st.nextToken();
+				// myRoomNumber = st.nextToken();
+				//
+				// frame.inPlayerlist.remove(user_id);
+				// frame.roomList.add(myRoomNumber);
+				//
+				// break;
+				//
+				case OK_ROOM:
+
+					if (frame.roomList.getSelectedItem().equals("")) {
+						// TODO 방을 선택해달라는 다이얼로그.
+						frame.la_dialog.setText("방을 선택해 주세요 !");
+		                frame.dialog.setVisible(true);
+						break;
+					}
+
+					int port = Integer.parseInt(frame.roomList.getSelectedItem());
+					gameThread = new GameThread(host, port);
+					System.out.println("클라이언트에서 게임 소켓 만듬."); // 테스트 코드.
+					output(ENTER_ROOM);
+
+					break;
+
+				case FULL_ROOM:
+
+					// TODO 방이 다 찼을 때 뜨는 다이얼로그.
+					roomNumber = st.nextToken();
+		            frame.la_dialog.setText(roomNumber + "번 방이 꽉찼어요 !");
+		            frame.dialog.setVisible(true);
+
+				case DELETE_ROOM:
+
+					roomNumber = st.nextToken();
+					frame.roomList.remove(roomNumber);
+					break;
+
+				case ENTER_ROOM:
+
+					user_id = st.nextToken();
+					roomNumber = st.nextToken();
+					myRoomNumber = roomNumber;
+
+					frame.waiting_userMsg.append(user_id + " 님이 " + roomNumber + " 번 방에 입장했습니다." + "\n");
+
+					// waiting_userMsg 스크롤바를 항상 최신 글에 맞춘다.
+					frame.waiting_userMsgBar.getVerticalScrollBar()
+							.setValue(frame.waiting_userMsgBar.getVerticalScrollBar().getMaximum());
+
+					frame.inPlayerlist.remove(user_id);
+
+					break;
+
+				case CONVERSATION:
+
+					user_id = st.nextToken();
+					message = st.nextToken();
+					frame.waiting_userMsg.append(user_id + ": " + message + "\n");
+
+					// userMsg 스크롤바를 항상 최신 글에 맞춘다.
+					frame.waiting_userMsgBar.getVerticalScrollBar()
+							.setValue(frame.waiting_userMsgBar.getVerticalScrollBar().getMaximum());
+					break;
+
+				} // end switch
+			} // end while
+		} catch (Exception ex) {
+
+		} // end catch
+	}
+
+	/**
+	 * 서버에 메세지를 출력을 할 때 호출되는 메소드.
+	 *
+	 * @param protocol
+	 *            프로토콜.
+	 * @param message
+	 *            사용자가 채팅할 때 텍스트필드에 입력한 문자열.
+	 * @since JDK 1.2
+	 */
+	void output(int protocol) {
+
+		String message;
+
+		switch (protocol) {
+
+		case ADD_MEMBER:
+			output.println(ADD_MEMBER + "|" + frame.textField_Join_3.getText().trim() + "|"
+					+ frame.textField_Join_1.getText().trim() + "|" + frame.textField_Join_2.getText().trim());
+			break;
+
+		case LOG_IN:
+			output.println(LOG_IN + "|" + frame.textField_Start_1.getText().trim() + "|"
+					+ frame.textField_Start_2.getText().trim());
+			break;
+
+		case FIRST_ENTER:
+			output.println(FIRST_ENTER + "|" + myId);
+			break;
+
+		case USER_ENTER:
+			output.println(USER_ENTER + "|" + myId);
+			break;
+
+		case LOG_OUT:
+			output.println(LOG_OUT + "|" + myId);
+			break;
+
+		case MAKE_ROOM:
+			output.println(MAKE_ROOM + "|" + myId);
+			gameThread = new GameThread(host, now_portNumber);
+			myRoomNumber = "" + now_portNumber;
+
+			break;
+
+		case KNOCK_ROOM:
+
+			if (frame.roomList.getSelectedItem() == null) {
+				// TODO 방을 선택해달라는 다이얼로그.
+				break;
+			}
+			int port = Integer.parseInt(frame.roomList.getSelectedItem());
+
+			output.println(KNOCK_ROOM + "|" + myId + "|" + port);
+			break;
+
+		case ENTER_ROOM:
+			myRoomNumber = frame.roomList.getSelectedItem();
+			output.println(ENTER_ROOM + "|" + myId + "|" + myRoomNumber);
+			break;
+
+		case GAME_MESSAGE_EXIT:
+			output.println(GAME_MESSAGE_EXIT + "|" + myId + "|" + myRoomNumber);
+			break;
+
+		case CONVERSATION:
+
+			// 채팅창에 입력된 값을 message라는 변수에 담는다.
+			message = frame.waiting_textField.getText();
+
+			// 사용자가 채팅 텍스트필드에 입력을 했는지 안했는지 검사.
+
+			if (message.equals("")) { // 입력을 하지 않은 경우.
+				output.println(CONVERSATION + "|" + myId + "|" + " ");
+				frame.waiting_textField.setText("");
+			} else { // 입력을 한 경우.
+				output.println(CONVERSATION + "|" + myId + "|" + message);
+				frame.waiting_textField.setText("");
+			} // end else
+			break;
+		} // end switch
+
+	}
+
+	@Override
+	public void actionPerformed(ActionEvent e) {
+		Object obj = e.getSource();
+
+		// 컴포넌트에 따른 이벤트 처리.
+
+		if (obj == frame.btn_Start_1) { // 초기화면에서 '로그인'을 클릭했을 때.
+			if (frame.textField_Start_1.getText().trim().length() == 0
+					|| frame.textField_Start_2.getText().trim().length() == 0) {
+
+				frame.la_dialog.setText("공백을 넣지 마세요 !");
+				frame.dialog.setVisible(true);
+			} else {
+				output(LOG_IN);
+			}
+		} else if (obj == frame.btn_Start_2) { // 초기화면에서 '회원가입'을 클릭했을 때.
+
+			frame.cards.show(frame.Main_p, "Join");
+
+		} else if (obj == frame.btn_Join) { // 회원가입 화면에서 'join'을 클릭했을 때.
+			if (frame.textField_Join_3.getText().trim().length() == 0
+					|| frame.textField_Join_1.getText().trim().length() == 0
+					|| frame.textField_Join_2.getText().trim().length() == 0) {
+
+				frame.la_dialog.setText("공백을 넣지 마세요 !");
+				frame.dialog.setVisible(true);
+			} else {
+				output(ADD_MEMBER);
+			}
+
+		} else if (obj == frame.joinBackBtn) {
+			frame.cards.show(frame.Main_p, "Start");
+		} else if (obj == frame.sendMsg) {
+			gameThread.output(GAME_CHAT);
+		} else if (obj == frame.creatGame) {
+
+			output(MAKE_ROOM);
+			frame.cards.show(frame.Main_p, "Main");
+
+			frame.systemMsg.setText("");
+			frame.userMsg.setText("");
+
+		} else if (obj == frame.joinGame) {
+			if (frame.roomList.getSelectedItem() == null) {
+	            frame.la_dialog.setText("방을 List에서 선택해주세요 !");
+	            frame.dialog.setVisible(true);
+	            return;
+	         }
+			output(KNOCK_ROOM);
+			frame.cards.show(frame.Main_p, "Main");
+
+			frame.systemMsg.setText("");
+			frame.userMsg.setText("");
+
+		} else if (obj == frame.waiting_textField) {
+			output(CONVERSATION);
+		} else if (obj == frame.mainBackBtn) {
+
+			gameThread.output(GAME_MESSAGE_EXIT);
+
+			try {
+				gameThread.input.close();
+				gameThread.output.close();
+				gameThread.socket.close();
+			} catch (IOException ex) {
+
+			}
+
+			output(GAME_MESSAGE_EXIT);
+			frame.cards.show(frame.Main_p, "Wait");
+			frame.waiting_userMsg.setText("");
+
+		}
+	}
+
+	@Override
+	public void keyPressed(KeyEvent e) {
+		// 예외처리를 위한 이벤트 처리
+		if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+			frame.textField_Start_1.setText("");
+			frame.textField_Start_2.setText("");
+			frame.textField_Join_1.setText("");
+			frame.textField_Join_2.setText("");
+			frame.textField_Join_3.setText("");
+
+			frame.la_dialog.setText("공백을 넣지 마세요 !");
+			frame.dialog.setVisible(true);
+		}
+
+	}
+
+	@Override
+	public void keyReleased(KeyEvent e) {
+	}
+
+	@Override
+	public void keyTyped(KeyEvent e) {
+	}
+
+	class GameThread extends Thread implements ActionListener {
+
+		private BufferedReader input;
+		private PrintWriter output;
+		private Thread gameThread;
+		private Socket socket;
+		private String host;
+		private String card;
+		private int port;
+
+		GameThread(String server, int port) {
+
+			host = server;
+			this.port = port;
+
+			gameThread = new Thread(this);
+			gameThread.start();
+
+			frame.cardDeck.addActionListener(this);
+			
+			frame.selectShapeBtn[0].addActionListener(new ActionListener() { // 스페이드 변경
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					System.out.println("스페이드로 모양 변경");
+					frame.selectShape.setVisible(false);
+					output.println(GAME_MESSAGE_USE_7 + "|" + "s7");
+				}
+			});
+			frame.selectShapeBtn[1].addActionListener(new ActionListener() { // 하트 변경
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					System.out.println("하트로 모양 변경");
+					frame.selectShape.setVisible(false);
+					output.println(GAME_MESSAGE_USE_7 + "|" + "h7");
+
+				}
+			});
+			frame.selectShapeBtn[2].addActionListener(new ActionListener() { // 다이아몬드 변경
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					System.out.println("다이아몬드로 모양 변경");
+					frame.selectShape.setVisible(false);
+					output.println(GAME_MESSAGE_USE_7 + "|" + "d7");
+				}
+			});
+
+			frame.selectShapeBtn[3].addActionListener(new ActionListener() { // 크로버 변경
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					System.out.println("크로버로 모양 변경");
+					frame.selectShape.setVisible(false);
+					output.println(GAME_MESSAGE_USE_7 + "|" + "c7");
+				}
+			});
+
+		}
+
+		public void run() {
+			try {
+				socket = new Socket(host, port);
+				InputStream ins = socket.getInputStream();
+				OutputStream os = socket.getOutputStream();
+
+				input = new BufferedReader(new InputStreamReader(ins));
+				output = new PrintWriter(new OutputStreamWriter(os), true);
+
+				output.println(myId);
+				// 무한 반복문으로 서버에서 들어오는 입력을 검사하고 출력한다.
+
+				while (true) {
+					String user_id = "";
+					String message = "";
+					String roomNumber;
+					String line = input.readLine();
+					StringTokenizer st = new StringTokenizer(line, "|");
+
+					// 프로토콜이 메세지의 제일 앞에 오므로 정수형으로 타입변환한다.
+					int protocol = Integer.parseInt(st.nextToken());
+
+					// 프로토콜로 구분되는 스위치문.
+
+					switch (protocol) {
+
+					case GAME_MESSAGE_IM_IN:
+
+						myNum = Integer.parseInt(st.nextToken());
+						frame.userName_La.setText(myId + "    " + myNum);
+
+						while (st.hasMoreTokens()) {
+							int userNum = Integer.parseInt(st.nextToken());
+							String userId = st.nextToken();
+
+							switch (myNum) {
+
+							case 0:
+
+								if (userNum == 1) {
+									frame.player2_nameLabel.setText(userId);
+								} else if (userNum == 2) {
+									frame.player3_nameLabel.setText(userId);
+								} else {
+									frame.player4_nameLabel.setText(userId);
+								}
+
+								break;
+
+							case 1:
+
+								if (userNum == 0) {
+									frame.player4_nameLabel.setText(userId);
+								} else if (userNum == 2) {
+									frame.player2_nameLabel.setText(userId);
+								} else {
+									frame.player3_nameLabel.setText(userId);
+								}
+
+								break;
+
+							case 2:
+
+								if (userNum == 0) {
+									frame.player3_nameLabel.setText(userId);
+								} else if (userNum == 1) {
+									frame.player4_nameLabel.setText(userId);
+								} else {
+									frame.player2_nameLabel.setText(userId);
+								}
+
+								break;
+
+							case 3:
+
+								if (userNum == 0) {
+									frame.player2_nameLabel.setText(userId);
+								} else if (userNum == 1) {
+									frame.player3_nameLabel.setText(userId);
+								} else {
+									frame.player4_nameLabel.setText(userId);
+								}
+
+								break;
+							}
+						}
+
+						output(GAME_MESSAGE_USER_ENTER);
+
+						break;
+
+					case GAME_MESSAGE_USER_ENTER:
+
+						user_id = st.nextToken();
+						int userNum = Integer.parseInt(st.nextToken());
+						frame.systemMsg.append(user_id + " 님이 입장했습니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+
+						if (userNum != myNum) {
+
+							switch (myNum) {
+
+							case 0:
+
+								if (userNum == 1) {
+									frame.player2_nameLabel.setText(user_id);
+								} else if (userNum == 2) {
+									frame.player3_nameLabel.setText(user_id);
+								} else {
+									frame.player4_nameLabel.setText(user_id);
+								}
+
+								break;
+
+							case 1:
+
+								if (userNum == 0) {
+									frame.player4_nameLabel.setText(user_id);
+								} else if (userNum == 2) {
+									frame.player2_nameLabel.setText(user_id);
+								} else {
+									frame.player3_nameLabel.setText(user_id);
+								}
+
+								break;
+
+							case 2:
+
+								if (userNum == 0) {
+									frame.player3_nameLabel.setText(user_id);
+								} else if (userNum == 1) {
+									frame.player4_nameLabel.setText(user_id);
+								} else {
+									frame.player2_nameLabel.setText(user_id);
+								}
+
+								break;
+
+							case 3:
+
+								if (userNum == 0) {
+									frame.player2_nameLabel.setText(user_id);
+								} else if (userNum == 1) {
+									frame.player3_nameLabel.setText(user_id);
+								} else {
+									frame.player4_nameLabel.setText(user_id);
+								}
+								break;
+							}
+						}
+						break;
+
+					case GAME_MESSAGE_START:
+						
+						System.out.println("GAME_MESSAGE_START 옴");
+						
+						frame.player2CardCnt.setText("7");
+						frame.player3CardCnt.setText("7");
+						frame.player4CardCnt.setText("7");
+						ready = true;
+						frame.cardDeck.setText("뽑기");
+						System.out.println("준비완료" + ready);
+
+						user_id = st.nextToken();
+						frame.systemMsg.append(user_id + " 님이 게임을 시작했습니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+						break;
+
+					case GAME_MESSAGE_CARD_OPEN:
+						System.out.println("서버에서 game message card open 받음.");
+						String openCard = st.nextToken();
+						int iconNum = cardList.indexOf(openCard);
+						frame.frontCard.setIcon(frame.cardImgList.get(iconNum));
+
+						break;
+
+					case GAME_MESSAGE_CARD_DIVIDE:
+
+						String userIdx = st.nextToken();
+						System.out.println(userIdx + "번 플레이어게에 카드나누기 시작");
+
+						int userIdxNum = Integer.parseInt(userIdx);
+						System.out.println("내 번호 :" + myNum);
+
+						if (userIdxNum == myNum) {
+
+							System.out.println("내가 카드 먹을 때");
+
+							for (int i = 0; i < playerCards.size(); i++) {
+								frame.playerCard[i].setVisible(false);
+								frame.playerCard[i].removeActionListener(this);
+							}
+
+							playerCards.add(st.nextToken());
+
+							if (playerCards.size() == 15) {
+								System.out.println("파산");
+								output(GAME_MESSAGE_DEAD);
+								// TODO 카드를 덱에 반납하고 덱 버튼 비활성화
+								continue;
+							}
+
+							for (int i = 0; i < playerCards.size(); i++) {
+								frame.playerCard[i]
+										.setIcon(frame.cardImgList.get(cardList.indexOf(playerCards.get(i))));
+								frame.playerCard[i].setVisible(true);
+								frame.playerCard[i].setEnabled(false);
+//								frame.playerCard[i].addActionListener(this);
+							}
+
+						}
+
+						break;
+
+					case GAME_MESSAGE_PUTDOWN:
+
+						user_id = st.nextToken();
+						frame.systemMsg.append(user_id + " 님이 카드를 한 장 냈습니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+
+						if (frame.player2_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player2CardCnt.getText().trim());
+							cnt--;
+							frame.player2CardCnt.setText("" + cnt);
+						} else if (frame.player3_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player3CardCnt.getText().trim());
+							cnt--;
+							frame.player3CardCnt.setText("" + cnt);
+						} else if (frame.player4_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player4CardCnt.getText().trim());
+							cnt--;
+							frame.player4CardCnt.setText("" + cnt);
+						}
+
+						break;
+						
+					case GAME_MESSAGE_USE_K :
+						
+						user_id = st.nextToken();
+						frame.systemMsg.append(user_id + " 님이 카드를 한 장을 더 냈습니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+
+						if (frame.player2_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player2CardCnt.getText().trim());
+							cnt--;
+							frame.player2CardCnt.setText("" + cnt);
+						} else if (frame.player3_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player3CardCnt.getText().trim());
+							cnt--;
+							frame.player3CardCnt.setText("" + cnt);
+						} else if (frame.player4_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player4CardCnt.getText().trim());
+							cnt--;
+							frame.player4CardCnt.setText("" + cnt);
+						}
+
+						break;
+						
+					case GAME_MESSAGE_ATTACK :
+						String attackCardsNumber = st.nextToken();
+						
+						attack = true;
+						System.out.println("공격 on");
+						
+						frame.countSeconds.setText(attackCardsNumber);
+						break;
+
+					case GAME_MESSAGE_ATTACK_END :
+						
+						attackCardsNumber = st.nextToken();
+						
+						attack = false;
+						System.out.println("공격 end");
+						
+						frame.countSeconds.setText(attackCardsNumber);
+						break;
+						
+					case GAME_MESSAGE_PUTUP:
+
+						user_id = st.nextToken();
+						frame.systemMsg.append(user_id + " 님이 카드를 한 장 먹었습니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+
+						if (frame.player2_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player2CardCnt.getText().trim());
+							cnt++;
+							frame.player2CardCnt.setText("" + cnt);
+						} else if (frame.player3_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player3CardCnt.getText().trim());
+							cnt++;
+							frame.player3CardCnt.setText("" + cnt);
+						} else if (frame.player4_nameLabel.getText().equals(user_id)) {
+							int cnt = Integer.parseInt(frame.player4CardCnt.getText().trim());
+							cnt++;
+							frame.player4CardCnt.setText("" + cnt);
+						}
+
+						break;
+
+					case GAME_MESSAGE_TIMESUP:
+//
+//						user_id = st.nextToken();
+//						frame.systemMsg.append(user_id + " 님이 시간을 초과했습니다." + "\n");
+//
+//						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+//						frame.systemMsgBar.getVerticalScrollBar()
+//								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+//						break;
+
+					case GAME_MESSAGE_ONECARD:
+
+						user_id = st.nextToken();
+						frame.systemMsg.append(user_id + " 님 원카드!!!" + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+						
+						frame.la_dialog.setText(user_id + " 님 원카드!!!");
+						frame.dialog.setVisible(true);
+						
+						break;
+
+					case GAME_MESSAGE_WIN:
+
+						user_id = st.nextToken();
+						frame.systemMsg.append(user_id + " 님이 이겼습니다~" + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+						
+						frame.la_dialog.setText(user_id + " 님이 이겼습니다~");
+						frame.dialog.setVisible(true);
+						
+						break;
+
+					case GAME_MESSAGE_DEAD :
+						
+						user_id = st.nextToken();
+						frame.la_dialog.setText(user_id + " 님이 파산했어요ㅠㅠ");
+						frame.dialog.setVisible(true);
+						
+					case GAME_MESSAGE_TURN:
+
+						String nextUserId = st.nextToken();
+						frame.systemMsg.append(nextUserId + " 님의 차례입니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+
+						frame.centerNameLa.setText(nextUserId);
+
+						if (myId.equals(nextUserId)) {
+							for (int i = 0; i < playerCards.size(); i++) {
+								frame.playerCard[i].setVisible(true);
+								frame.playerCard[i].setEnabled(true);
+								frame.playerCard[i].addActionListener(this);
+							}
+						} else {
+							for (int i = 0; i < playerCards.size(); i++) {
+								frame.playerCard[i].setEnabled(false);
+								frame.playerCard[i].removeActionListener(this);
+							}
+						}
+
+						break;
+
+					case GAME_MESSAGE_EXIT:
+
+						user_id = st.nextToken();
+						frame.systemMsg.append(user_id + " 님이 퇴장했습니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+
+						break;
+
+					case GAME_MESSAGE_END_GAME :
+						
+						ready = false;
+						frame.systemMsg.append("게임이 끝났습니다." + "\n");
+
+						// systemMsgBar 스크롤바를 항상 최신 글에 맞춘다.
+						frame.systemMsgBar.getVerticalScrollBar()
+								.setValue(frame.systemMsgBar.getVerticalScrollBar().getMaximum());
+
+						break;
+						
+					case GAME_CHAT:
+
+						user_id = st.nextToken();
+						message = st.nextToken();
+						frame.userMsg.append(user_id + ": " + message + "\n");
+
+						// userMsg 스크롤바를 항상 최신 글에 맞춘다.
+						frame.userMsgBar.getVerticalScrollBar()
+								.setValue(frame.userMsgBar.getVerticalScrollBar().getMaximum());
+						break;
+
+					} // end switch
+				} // end while
+			} catch (Exception ex) {
+
+			} // end catch
+		}
+
+		void output(int protocol) {
+
+			switch (protocol) {
+
+			case GAME_MESSAGE_USER_ENTER:
+				output.println(GAME_MESSAGE_USER_ENTER + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_START:
+				output.println(GAME_MESSAGE_START + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_PUTDOWN:
+				output.println(GAME_MESSAGE_PUTDOWN + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_PUTUP:
+				output.println(GAME_MESSAGE_PUTUP + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_TIMESUP:
+				output.println(GAME_MESSAGE_TIMESUP + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_ONECARD:
+				output.println(GAME_MESSAGE_ONECARD + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_WIN:
+				output.println(GAME_MESSAGE_WIN + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_DEAD:
+				output.println(GAME_MESSAGE_DEAD + "|" + myId);
+				break;
+				
+			case GAME_MESSAGE_END_TURN:
+				output.println(GAME_MESSAGE_END_TURN + "|" + myId);
+				break;
+
+			case GAME_MESSAGE_EXIT:
+				output.println(GAME_MESSAGE_EXIT + "|" + myId + "|" + myNum);
+				break;
+
+			case GAME_CHAT:
+
+				// 채팅창에 입력된 값을 message라는 변수에 담는다.
+				String message = frame.sendMsg.getText();
+
+				// 사용자가 채팅 텍스트필드에 입력을 했는지 안했는지 검사.
+
+				if (message.equals("")) { // 입력을 하지 않은 경우.
+					output.println(GAME_CHAT + "|" + myId + "|" + " ");
+					frame.sendMsg.setText("");
+				} else { // 입력을 한 경우.
+					output.println(GAME_CHAT + "|" + myId + "|" + message);
+					frame.sendMsg.setText("");
+				} // end else
+				break;
+			}
+		}
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			Object obj = e.getSource();
+
+			// 컴포넌트에 따른 이벤트 처리.
+
+			if (obj == frame.cardDeck) { // 카드를 뽑을 때
+
+				if (ready == false) { // 만약 시작이라면
+
+					output(GAME_MESSAGE_START);
+					System.out.println("Request GAME_MESSAGE_START");
+
+				} else if (ready == true) { // 시작 이후
+					
+					 if (attack == false) {
+						 output(GAME_MESSAGE_PUTUP);
+		                  System.out.println("Request 1100");
+
+		               } else if (attack) {
+		                  int attackCnt = Integer.parseInt(frame.countSeconds.getText().trim());
+		                  output.println(GAME_MESSAGE_ATTACK_END + "|" + myId + "|" + attackCnt);
+
+		               }
+					System.out.println(myNum + "," + userIdx);
+					
+				}
+
+				// 사용자의 카드를 선택하였을 때
+			} else if (obj == frame.playerCard[0] || obj == frame.playerCard[1] || obj == frame.playerCard[2]
+					|| obj == frame.playerCard[3] || obj == frame.playerCard[4] || obj == frame.playerCard[5]
+					|| obj == frame.playerCard[6] || obj == frame.playerCard[7] || obj == frame.playerCard[8]
+					|| obj == frame.playerCard[9] || obj == frame.playerCard[10] || obj == frame.playerCard[11]
+					|| obj == frame.playerCard[12] || obj == frame.playerCard[13]) {
+
+				System.out.println("카드사용 메소드 돌입");
+				JButton btn = (JButton) obj; // 선택한 카드 버튼
+				// String card = btn.getText(); // 선택한 카드의 텍스트
+				String iconSrc = btn.getIcon().toString();
+				StringTokenizer st1 = new StringTokenizer(iconSrc, "/");
+				st1.nextToken();
+				st1.nextToken();
+
+				StringTokenizer st2 = new StringTokenizer(st1.nextToken(), ".");
+				card = st2.nextToken();
+				System.out.println("선택한 카드는 " + card);
+
+				String selectCardShape = card.substring(0, 1); // 선택한 카드의 모양
+				String selectCardNumber = card.substring(1); // 선택한 카드의 숫자
+				System.out.println("카드 모양: " + selectCardShape + ", 카드 번호: " + selectCardNumber);
+
+				// 깔려있는 카드를 가져와서 비교할 수 있게 가공한다.
+				String frontIconSrc = frame.frontCard.getIcon().toString();
+				StringTokenizer st3 = new StringTokenizer(frontIconSrc, "/");
+				st3.nextToken();
+				st3.nextToken();
+				StringTokenizer st4 = new StringTokenizer(st3.nextToken(), ".");
+				String front = st4.nextToken();
+				String frontCardShape = front.substring(0, 1); // 선택한 카드의 모양
+				String frontCardNumber = front.substring(1); // 선택한 카드의 숫자
+
+				// 낸 카드와 깔려있는 카드를 비교한다.
+
+				if (frontCardShape.equals(selectCardShape) || frontCardNumber.equals(selectCardNumber)) {
+
+					if (attack) {
+						int selectNum = Integer.parseInt(selectCardNumber);
+						if (selectNum > 2) {
+							System.out.println("낼수없다");
+							// TODO 낼 수 없다는 다이얼로그.
+							return;
+						}
+					}
+					
+					if (selectCardNumber.equals("7")) {
+						System.out.println("7을 냈다.");
+						frame.selectShape.setVisible(true);
+					}  else if (selectCardNumber.equals("1") || selectCardNumber.equals("2")) {
+		                  if (selectCardNumber.equals("1")) {
+		                      int attackCnt = Integer.parseInt(frame.countSeconds.getText().trim());
+		                      attackCnt += 3;
+		                      output.println(GAME_MESSAGE_ATTACK + "|" + attackCnt);
+		                   } else if (selectCardNumber.equals("2")) {
+		                      int attackCnt = Integer.parseInt(frame.countSeconds.getText().trim());
+		                      attackCnt += 2;
+		                      output.println(GAME_MESSAGE_ATTACK + "|" + attackCnt);
+		                   }
+					} 
+
+					output.println(GAME_MESSAGE_PUTDOWN + "|" + card + "|" + myId);
+
+					for (int i = 0; i < playerCards.size(); i++) {
+						frame.playerCard[i].setVisible(false);
+						frame.playerCard[i].removeActionListener(this);
+					}
+
+					playerCards.remove(card);
+					System.out.println("카드 사용.");
+
+					for (int i = 0; i < playerCards.size(); i++) {
+						frame.playerCard[i].setVisible(true);
+						frame.playerCard[i].setEnabled(false);
+//						frame.playerCard[i].addActionListener(this);
+						frame.playerCard[i].setIcon(frame.cardImgList.get(cardList.indexOf(playerCards.get(i))));
+					}
+				} else {
+					// TODO 카드를 낼 수 없다는 다이얼로그
+					System.out.println("낼수없다.");
+				}
+				if (playerCards.size() == 1) {
+					output(GAME_MESSAGE_ONECARD);
+				} else if (playerCards.size() == 0) {
+					output(GAME_MESSAGE_WIN);
+				}
+				
+			}
+		}
+	}
+
+	// 메인 메소드
+	public static void main(String args[]) {
+		if (args.length > 0) {
+			new Client(args[0]);
+		} else {
+			new Client("localhost");
+		} // end else
+	}
+}

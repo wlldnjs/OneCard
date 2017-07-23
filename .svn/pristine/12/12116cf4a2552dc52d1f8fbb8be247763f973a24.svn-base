@@ -1,0 +1,415 @@
+package test;
+
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+
+import javax.swing.JButton;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextArea;
+
+public class Game extends JFrame implements Runnable, ActionListener {
+	// 카드를 저장할 List 생성
+	public static List<String> cardList = new ArrayList<String>();
+	public static List<Integer> cardDeck1 = new ArrayList<Integer>(); // 처음 섞인
+																		// 카드 덱
+	public static List<Integer> cardDeck2 = new ArrayList<Integer>(); // 사용한 카드가
+																		// 담긴 덱
+
+	// 각각의 플레이어가 소지한 카드의 리스트
+	public static List<String> player1 = new ArrayList<String>();
+	public static List<String> player2 = new ArrayList<String>();
+	public static List<String> player3 = new ArrayList<String>();
+	public static List<String> player4 = new ArrayList<String>();
+
+	// 멤버필드 변수 선언(버튼, 텍스트Area)
+	public JButton[] b1 = new JButton[15];
+	JTextArea[] tf = new JTextArea[5];
+
+	// 랜덤함수 생성
+	Random ran = new Random();
+
+	// 모양변경 다이어로그
+	JDialog selectShape;
+	JPanel grid;
+	JLabel dialogMsg;
+	JButton[] selectShapeBtn = new JButton[4];
+
+	// 메세지 다이어로그
+	JDialog dialog;
+	JLabel dialogText;
+
+	// 화면구성
+	JPanel p1, p2;
+	JButton btn;
+
+	public static int cardIdx = 1; // 뽑을 카드의 인덱스, 처음 시작 시 한장이 사용되므로 첫 인덱스는 1
+	public static int deck2Idx = 1; // 사용된 카드의 인덱스, 처음 시작시 한장이 미리 사용되므로 첫 인덱스는 1
+	public static int userIdx = 0; // 플레이어의 순서 인덱스 첫번째 사용자가 0부터 시작하며 각각 번호가 부여.
+									// 최대는 3
+	public static int selectCardIdx = 0; // 사용자가 카드를 사용할때 사용하는 카드의 번호가 들어갈 변수
+	public static boolean gameStart = true; // 게임이 시작되었는지 알려주는 변수
+	public String frontCardShape = ""; // 현재 필드에 나와있는 카드의 모양
+	public String frontCardNumber = ""; // 현재 필드에 나와있는 카드의 숫자
+	public String frontCard = ""; // 현재 필드에 나와있는 카드의 정보
+	public static boolean cardChange = false; // 7카드가 나왔을 때 카드를 변경할 수 있게 도와주는 변수
+	public static boolean playBack = false; // Q카드 사용 시 거꾸로
+	public static boolean playJamp = false; // J카드 사용시 점프
+	
+	public static boolean check = false;	// 중복 체크용
+	public static boolean jump = false;	// 점프 확인용
+
+	public Game() {
+		// cardList에 카드 생성
+		// ♠=s1~13, ♡=h1~13, ◇=d1~13, ♣=c1~13, blackJoker=j1, colorJoker=j2
+		// 0 = j1 , 1~13 = s1~13, 14~26 = h1~13, 27~39 = d1~13,
+		// 40~52 = c1~13, 53 = j2
+
+		cardList.add("jb");
+		for (int i = 0; i < 13; i++) {
+			cardList.add("s" + (i + 1));
+		}
+		for (int i = 0; i < 13; i++) {
+			cardList.add("h" + (i + 1));
+		}
+		for (int i = 0; i < 13; i++) {
+			cardList.add("d" + (i + 1));
+		}
+		for (int i = 0; i < 13; i++) {
+			cardList.add("c" + (i + 1));
+		}
+		cardList.add("jc");
+
+		// // 테스트용 덱
+		// for(int i=0;i<10;i++){
+		// cardList.add("h7");
+		// cardList.add("d7");
+		// cardList.add("c7");
+		// cardList.add("s7");
+		// cardList.add("h1");
+		// cardList.add("d1");
+		// cardList.add("c1");
+		// cardList.add("s1");
+		// }
+
+		// 레이아웃
+		this.setLayout(new BorderLayout());
+		p1 = new JPanel(new GridLayout(1, 6, 5, 10));
+		p2 = new JPanel(new FlowLayout());
+		btn = new JButton("카드 뽑기");
+
+		for (int i = 0; i < 5; i++) {
+			tf[i] = new JTextArea();
+			p1.add(tf[i]);
+		}
+		for (int i = 0; i < 15; i++) {
+			b1[i] = new JButton();
+			p2.add(b1[i]);
+			b1[i].setVisible(false);
+		}
+
+		// 카드변경 다이어로그 생성
+		selectShape = new JDialog();
+		selectShape.setLayout(new BorderLayout());
+		grid = new JPanel(new GridLayout(1, 4, 5, 10));
+		dialogMsg = new JLabel("바꿀 모양을 선택해주세요!");
+		selectShapeBtn[0] = new JButton("♠");
+		selectShapeBtn[1] = new JButton("♡");
+		selectShapeBtn[2] = new JButton("◇");
+		selectShapeBtn[3] = new JButton("♣");
+		for (int i = 0; i < 4; i++) {
+			grid.add(selectShapeBtn[i]);
+		}
+		selectShape.add(grid, "Center");
+		selectShape.add(dialogMsg, "North");
+		selectShape.setSize(270, 100);
+		selectShapeBtn[0].addActionListener(new ActionListener() { // 스페이드 변경
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				frontCard = "s7";
+				System.out.println("스페이드로 모양 변경");
+				selectShape.setVisible(false);
+				tf[4].setText("s7");
+				cardChange = true;
+			}
+		});
+		selectShapeBtn[1].addActionListener(new ActionListener() { // 하트 변경
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				frontCard = "h7";
+				System.out.println("하트로 모양 변경");
+				selectShape.setVisible(false);
+				tf[4].setText("h7");
+				cardChange = true;
+			}
+		});
+		selectShapeBtn[2].addActionListener(new ActionListener() { // 다이아몬드 변경
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				frontCard = "d7";
+				System.out.println("다이아몬드로 모양 변경");
+				selectShape.setVisible(false);
+				tf[4].setText("d7");
+				cardChange = true;
+			}
+		});
+
+		selectShapeBtn[3].addActionListener(new ActionListener() { // 크로버 변경
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				frontCard = "c7";
+				System.out.println("크로버로 모양 변경");
+				selectShape.setVisible(false);
+				tf[4].setText("c7");
+				cardChange = true;
+			}
+		});
+
+		// 일반 메시지 다이어로그
+		dialog = new JDialog();
+		dialogText = new JLabel();
+		dialog.add(dialogText);
+		dialog.setSize(200, 100);
+		;
+
+		// 생성된 cardList를 cardDeck1에 랜덤으로 넣음
+		int cards = cardList.size();
+		for (int i = 0; i < cards; i++) {
+			cardDeck1.add(ran.nextInt(cards));
+			// 중복 체크
+			for (int j = 0; j < cardDeck1.size(); j++) {
+				if (cardDeck1.get(i) == cardDeck1.get(j)) {
+					if (i != j) {
+						cardDeck1.remove(i);
+						i--;
+					}
+				}
+			}
+		}
+		cardDeck2.add(cardDeck1.get(0));
+		tf[4].setText(cardList.get(cardDeck2.get(0)));
+
+		// // 랜덤 생성된 카드 리스트 출력
+		// for (int i = 0; i < cards; i++) {
+		// // System.out.println(cardDeck1.get(i));
+		// System.out.println(cardList.get(cardDeck1.get(i)));
+		// }
+
+		// 창 세팅
+		p1.add(btn);
+		add(p1);
+		add(p2, "North");
+
+		btn.addActionListener(this);
+
+		setVisible(true);
+		setSize(700, 500);
+		this.setDefaultCloseOperation(EXIT_ON_CLOSE);
+	}
+
+	@Override
+	public void run() {
+
+	}
+
+	@Override
+	public void actionPerformed(ActionEvent e) {
+		Object obj = e.getSource();
+		JButton btn1 = (JButton) obj;
+		if (btn1 == btn) { // 카드뽑기 버튼
+			if (cardIdx != cardDeck1.size()) { // 덱의 카드가 떨어질 때 까지 카드뽑기 가능
+
+				if (userIdx == 0) {
+					player1.add(cardList.get(cardDeck1.get(cardIdx))); // 덱에 있는
+																		// 번호를
+																		// 카드리스트의
+																		// 번호에
+																		// 따른
+																		// 카드명과
+																		// 비교하여
+																		// 카드를
+																		// 넣음
+
+					for (int i = 0; i < player1.size(); i++) { // 들고있는 카드의 리스트
+																// 출력해주기
+
+						b1[i].setText(player1.get(i));
+						b1[i].addActionListener(this);
+						b1[i].setVisible(true);
+					}
+				}
+
+				tf[userIdx].append(cardList.get(cardDeck1.get(cardIdx)) + "\n"); // 텍스트
+																					// 필드에
+																					// 뽑힌
+																					// 카드
+																					// 보여주기
+
+				// 다음차례로 넘김
+				cardIdx++;
+				if (playBack) {
+					userIdx--;
+				} else {
+					userIdx++;
+				}
+
+				if (userIdx == 4) { // 유저가 한바퀴 돈다면 다시 처음순서로
+					userIdx = 0;
+				}
+
+			} else if (cardDeck1.size() == 0) { // 모든 카드를 사용하였을 때
+				System.out.println("더이상 뽑을 카드가 없습니다.");
+			}
+
+			else { // 카드가 다 떨어졌을 때 재분배
+				System.out.println("모든 카드 소진");
+				// 처음 덱의 리스트 삭제
+				cardDeck1.removeAll(cardDeck1);
+				// 사용한 카드 다시 섞어서 처음덱에 넣기
+				int cards = cardDeck2.size();
+				Collections.shuffle(cardDeck2);
+				for (int i = 0; i < cards; i++) {
+					cardDeck1.add(cardDeck2.get(i));
+				}
+				cardDeck2.removeAll(cardDeck2);
+				cardIdx = 0;
+
+			}
+		} else if (btn1 != btn) { // 카드를 사용할 때
+			if (userIdx == 0) {
+				useCard(btn1);
+			} else {
+				dialogText.setText((userIdx + 1) + "님의 차례입니다.");
+				dialog.setVisible(true);
+			}
+
+		}
+
+	}
+
+	public void useCard(JButton btn1) {
+
+		String selectCard = btn1.getText();	// 선택한 카드의 이름이 들어감
+		int selectCardIdx = cardList.indexOf(selectCard); // 선택한 카드의 인덱스 번호가 들어감
+		String cardShape = selectCard.substring(0, 1);	//선택한 카드의 모양
+		String cardNumber = selectCard.substring(1);	//선택한 카드의 숫자
+		
+		System.out.println("카드 모양: " + cardShape + ", 카드 번호: " + cardNumber);
+		if(frontCard.equals("jb") || frontCard.equals("jc")){ // TODO 조커 사용시
+			
+		}
+		
+		if (cardDeck2.isEmpty()) {
+			System.out.println("비어있다");
+		} else if (cardChange == false) {
+			frontCard = cardList.get(cardDeck2.get(deck2Idx - 1));
+			System.out.println(cardList.get(cardDeck2.get(deck2Idx - 1)));
+		} else if (cardChange == true) {
+			frontCard = tf[4].getText();
+			cardChange = false;
+		}
+
+		frontCardShape = frontCard.substring(0, 1);
+		frontCardNumber = frontCard.substring(1);
+		
+		if (frontCardShape.equals(cardShape) || frontCardNumber.equals(cardNumber) || cardShape.equals("j")) {
+			
+			// 사용한 카드 덱에 넣을 때
+			for (int i = 0; i < cardDeck2.size(); i++) {
+				if (selectCardIdx == cardDeck2.get(i)) { // 중복일 때
+					check = true;
+					break;
+				}
+			}
+			if (check == false) { // 중복이 아니라면
+
+				cardDeck2.add(selectCardIdx);
+				deck2Idx++;
+				tf[4].setText(selectCard);
+				System.out.println("Deck2에 " + cardList.get(selectCardIdx) + "가 들어갔다!");
+
+				// 7일때
+				if (cardNumber.equals("7")) {
+					selectShape.setVisible(true);
+					System.out.println("7이당");
+				}
+
+				// TODO Q일때
+				else if (cardNumber.equals("12")) {
+					playBack = !playBack;
+				}
+
+				// TODO joker 일때
+				else if(cardShape.equals("j")){
+					if(cardNumber.equals("b")){
+						System.out.println("black조커 사용");
+					} else if(cardNumber.equals("c")){
+						System.out.println("color조커 사용");
+					}
+					
+				}
+				// J일때
+				else if (cardNumber.equals("11")) {
+					jump = true;
+					System.out.println("J이당");
+				}
+
+				
+				// 상태에 따른 순서 변환
+				if (playBack) {
+					if (jump) {
+						if (userIdx == 2) {
+							userIdx = 4;
+						} else if (userIdx == 1) {
+							userIdx = 3;
+						} else {
+							userIdx = userIdx - 2;
+						}
+					} else {
+						userIdx--;
+					}
+					jump = false;
+				} else {
+					if (jump) {
+						if (userIdx == 3) {
+							userIdx = 1;
+						} else if (userIdx == 4) {
+							userIdx = 2;
+						} else {
+							userIdx = userIdx + 2;
+						}
+					} else {
+						userIdx++; // 차례 넘기기
+					}
+					jump = false;
+				}
+			}
+			check = false;
+
+			player1.remove(btn1.getText());
+			btn1.setVisible(false);
+
+		} else if (!frontCardShape.equals(cardShape) && !frontCardNumber.equals(cardNumber)) {
+			System.out.println("모양이 다릅니다.");
+		}
+
+	}
+	
+	public void insertDeck(){
+		
+	}
+
+	public static void main(String args[]) {
+		new Game();
+	}
+
+}

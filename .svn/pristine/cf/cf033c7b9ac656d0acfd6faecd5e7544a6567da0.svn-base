@@ -1,0 +1,21 @@
+package test;
+public class InGameThread extends Thread {
+
+	public InGameThread() {
+
+	}
+
+	@Override
+	public void run() {
+		while (true) {
+			try {
+				Thread.sleep(500);
+				OneCardGUI.centerNameLa.setText((Server.userIdx) + " player");
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+	}
+}
